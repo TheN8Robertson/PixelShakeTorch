@@ -11,7 +11,7 @@ object Prefs {
 
     const val DEFAULT_THRESHOLD_G = 2.7f
     const val MIN_THRESHOLD_G = 1.5f
-    const val MAX_THRESHOLD_G = 4.5f
+    const val MAX_THRESHOLD_G = 8.0f
     const val THRESHOLD_STEP_G = 0.1f
 
     fun get(context: Context): SharedPreferences =

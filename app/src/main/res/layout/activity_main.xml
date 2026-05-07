@@ -57,7 +57,7 @@
         android:layout_height="wrap_content"
         android:layout_marginTop="4dp"
         android:valueFrom="1.5"
-        android:valueTo="4.5"
+        android:valueTo="8.0"
         android:stepSize="0.1"
         app:layout_constraintTop_toBottomOf="@id/sensitivityLabel"
         app:layout_constraintStart_toStartOf="parent"
