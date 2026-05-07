@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">PixelShakeTorch</string>
+    <string name="status_on">On</string>
+    <string name="status_off">Off</string>
+    <string name="action_turn_on">Turn On</string>
+    <string name="action_turn_off">Turn Off</string>
+    <string name="hint_shake_to_toggle">Shake your phone to toggle the flashlight.</string>
+    <string name="hint_need_permission">Camera permission is required to control the flashlight.</string>
+    <string name="hint_no_flash">No back-camera flash detected on this device.</string>
+</resources>

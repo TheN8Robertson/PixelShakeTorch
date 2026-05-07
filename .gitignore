@@ -1,0 +1,23 @@
+# Built / generated
+*.iml
+.gradle/
+local.properties
+.idea/
+build/
+captures/
+.externalNativeBuild/
+.cxx/
+app/build/
+app/release/
+*.apk
+*.aab
+*.ap_
+*.dex
+
+# Logs / OS
+.DS_Store
+Thumbs.db
+
+# Keep gradle wrapper bits
+!gradle-wrapper.jar
+!gradle-wrapper.properties
