@@ -11,11 +11,26 @@ android {
         applicationId = "com.naterobertson.pixelshaketorch"
         minSdk = 24
         targetSdk = 34
-        versionCode = 3
-        versionName = "0.3.0"
+        versionCode = 4
+        versionName = "0.4.0"
+    }
+
+    // Stable debug keystore committed to the repo so every build (local or CI)
+    // is signed with the same key — required for sideload upgrades to succeed.
+    // Not used for Play Store distribution.
+    signingConfigs {
+        getByName("debug") {
+            storeFile = file("debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
     }
 
     buildTypes {
+        debug {
+            signingConfig = signingConfigs.getByName("debug")
+        }
         release {
             isMinifyEnabled = false
             proguardFiles(
