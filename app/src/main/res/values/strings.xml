@@ -6,6 +6,14 @@
     <string name="action_turn_on">Turn On</string>
     <string name="action_turn_off">Turn Off</string>
     <string name="hint_shake_to_toggle">Shake your phone to toggle the flashlight.</string>
+    <string name="hint_shake_to_toggle_bg">Background mode active — shake works with the app closed.</string>
     <string name="hint_need_permission">Camera permission is required to control the flashlight.</string>
     <string name="hint_no_flash">No back-camera flash detected on this device.</string>
+    <string name="background_mode_label">Background mode</string>
+
+    <string name="notif_channel_name">Shake detection</string>
+    <string name="notif_channel_desc">Listens for shakes to toggle the flashlight while the app is closed.</string>
+    <string name="notif_title">PixelShakeTorch is listening</string>
+    <string name="notif_text">Shake to toggle the flashlight.</string>
+    <string name="notif_action_stop">Stop</string>
 </resources>

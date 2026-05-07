@@ -23,11 +23,27 @@ class MainActivity : AppCompatActivity() {
     private lateinit var shakeDetector: ShakeDetector
 
     private var hasCameraPermission = false
+    private var hasNotificationPermission = false
+    private var pendingBackgroundEnable = false
 
     private val cameraPermission = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { granted ->
         hasCameraPermission = granted
+        updateStatus()
+    }
+
+    private val notificationPermission = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        hasNotificationPermission = granted
+        if (granted && pendingBackgroundEnable) {
+            ShakeService.start(this)
+            stopForegroundSensorListening()
+        } else if (!granted) {
+            binding.backgroundSwitch.isChecked = false
+        }
+        pendingBackgroundEnable = false
         updateStatus()
     }
 
@@ -43,10 +59,20 @@ class MainActivity : AppCompatActivity() {
         shakeDetector = ShakeDetector(onShake = { onShakeDetected() })
 
         binding.toggleButton.setOnClickListener { flashlight.toggle() }
+        binding.backgroundSwitch.setOnCheckedChangeListener { _, isChecked ->
+            onBackgroundToggle(isChecked)
+        }
 
         hasCameraPermission = ContextCompat.checkSelfPermission(
             this, Manifest.permission.CAMERA
         ) == PackageManager.PERMISSION_GRANTED
+
+        hasNotificationPermission =
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                ContextCompat.checkSelfPermission(
+                    this, Manifest.permission.POST_NOTIFICATIONS
+                ) == PackageManager.PERMISSION_GRANTED
+            } else true
 
         if (!hasCameraPermission) {
             cameraPermission.launch(Manifest.permission.CAMERA)
@@ -57,11 +83,28 @@ class MainActivity : AppCompatActivity() {
         super.onStart()
         flashlight.start()
         renderTorchState(flashlight.isOn)
+        binding.backgroundSwitch.isChecked = ShakeService.isRunning
         updateStatus()
     }
 
     override fun onResume() {
         super.onResume()
+        if (!ShakeService.isRunning) {
+            startForegroundSensorListening()
+        }
+    }
+
+    override fun onPause() {
+        stopForegroundSensorListening()
+        super.onPause()
+    }
+
+    override fun onStop() {
+        flashlight.stop()
+        super.onStop()
+    }
+
+    private fun startForegroundSensorListening() {
         sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)?.let { sensor ->
             sensorManager.registerListener(
                 shakeDetector,
@@ -71,14 +114,31 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    override fun onPause() {
+    private fun stopForegroundSensorListening() {
         sensorManager.unregisterListener(shakeDetector)
-        super.onPause()
     }
 
-    override fun onStop() {
-        flashlight.stop()
-        super.onStop()
+    private fun onBackgroundToggle(enabled: Boolean) {
+        if (enabled) {
+            if (!hasCameraPermission) {
+                binding.backgroundSwitch.isChecked = false
+                cameraPermission.launch(Manifest.permission.CAMERA)
+                return
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                !hasNotificationPermission
+            ) {
+                pendingBackgroundEnable = true
+                notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+                return
+            }
+            ShakeService.start(this)
+            stopForegroundSensorListening()
+        } else {
+            ShakeService.stop(this)
+            startForegroundSensorListening()
+        }
+        updateStatus()
     }
 
     private fun onShakeDetected() {
@@ -105,12 +165,11 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun updateStatus() {
-        if (!flashlight.isAvailable) {
-            binding.hintText.text = getString(R.string.hint_no_flash)
-        } else if (!hasCameraPermission) {
-            binding.hintText.text = getString(R.string.hint_need_permission)
-        } else {
-            binding.hintText.text = getString(R.string.hint_shake_to_toggle)
+        binding.hintText.text = when {
+            !flashlight.isAvailable -> getString(R.string.hint_no_flash)
+            !hasCameraPermission -> getString(R.string.hint_need_permission)
+            ShakeService.isRunning -> getString(R.string.hint_shake_to_toggle_bg)
+            else -> getString(R.string.hint_shake_to_toggle)
         }
     }
 
