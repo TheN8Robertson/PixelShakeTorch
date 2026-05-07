@@ -2,6 +2,7 @@ package com.naterobertson.pixelshaketorch
 
 import android.Manifest
 import android.content.Context
+import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.hardware.Sensor
 import android.hardware.SensorManager
@@ -21,6 +22,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var sensorManager: SensorManager
     private lateinit var flashlight: FlashlightController
     private lateinit var shakeDetector: ShakeDetector
+    private lateinit var prefs: SharedPreferences
 
     private var hasCameraPermission = false
     private var hasNotificationPermission = false
@@ -30,6 +32,12 @@ class MainActivity : AppCompatActivity() {
         ActivityResultContracts.RequestPermission()
     ) { granted ->
         hasCameraPermission = granted
+        if (granted && pendingBackgroundEnable) {
+            continueBackgroundEnable()
+        } else if (!granted) {
+            pendingBackgroundEnable = false
+            setSwitchSilently(false)
+        }
         updateStatus()
     }
 
@@ -37,13 +45,14 @@ class MainActivity : AppCompatActivity() {
         ActivityResultContracts.RequestPermission()
     ) { granted ->
         hasNotificationPermission = granted
-        if (granted && pendingBackgroundEnable) {
-            ShakeService.start(this)
-            stopForegroundSensorListening()
-        } else if (!granted) {
-            binding.backgroundSwitch.isChecked = false
+        if (pendingBackgroundEnable) {
+            if (granted) {
+                enableBackgroundService()
+            } else {
+                pendingBackgroundEnable = false
+                setSwitchSilently(false)
+            }
         }
-        pendingBackgroundEnable = false
         updateStatus()
     }
 
@@ -52,6 +61,8 @@ class MainActivity : AppCompatActivity() {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
+        prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+
         sensorManager = getSystemService(Context.SENSOR_SERVICE) as SensorManager
         flashlight = FlashlightController(this)
         flashlight.onStateChanged = { on -> renderTorchState(on) }
@@ -59,9 +70,7 @@ class MainActivity : AppCompatActivity() {
         shakeDetector = ShakeDetector(onShake = { onShakeDetected() })
 
         binding.toggleButton.setOnClickListener { flashlight.toggle() }
-        binding.backgroundSwitch.setOnCheckedChangeListener { _, isChecked ->
-            onBackgroundToggle(isChecked)
-        }
+        attachSwitchListener()
 
         hasCameraPermission = ContextCompat.checkSelfPermission(
             this, Manifest.permission.CAMERA
@@ -74,7 +83,14 @@ class MainActivity : AppCompatActivity() {
                 ) == PackageManager.PERMISSION_GRANTED
             } else true
 
-        if (!hasCameraPermission) {
+        val isFirstLaunch = !prefs.getBoolean(KEY_FIRST_LAUNCH_DONE, false)
+        if (isFirstLaunch) {
+            prefs.edit().putBoolean(KEY_FIRST_LAUNCH_DONE, true).apply()
+            if (flashlight.isAvailable) {
+                pendingBackgroundEnable = true
+                requestNextPermissionForBackground()
+            }
+        } else if (!hasCameraPermission) {
             cameraPermission.launch(Manifest.permission.CAMERA)
         }
     }
@@ -83,7 +99,7 @@ class MainActivity : AppCompatActivity() {
         super.onStart()
         flashlight.start()
         renderTorchState(flashlight.isOn)
-        binding.backgroundSwitch.isChecked = ShakeService.isRunning
+        setSwitchSilently(ShakeService.isRunning)
         updateStatus()
     }
 
@@ -120,24 +136,43 @@ class MainActivity : AppCompatActivity() {
 
     private fun onBackgroundToggle(enabled: Boolean) {
         if (enabled) {
-            if (!hasCameraPermission) {
-                binding.backgroundSwitch.isChecked = false
-                cameraPermission.launch(Manifest.permission.CAMERA)
+            if (!flashlight.isAvailable) {
+                setSwitchSilently(false)
                 return
             }
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-                !hasNotificationPermission
-            ) {
-                pendingBackgroundEnable = true
-                notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
-                return
-            }
-            ShakeService.start(this)
-            stopForegroundSensorListening()
+            pendingBackgroundEnable = true
+            requestNextPermissionForBackground()
         } else {
+            pendingBackgroundEnable = false
             ShakeService.stop(this)
             startForegroundSensorListening()
+            updateStatus()
         }
+    }
+
+    private fun requestNextPermissionForBackground() {
+        if (!hasCameraPermission) {
+            cameraPermission.launch(Manifest.permission.CAMERA)
+            return
+        }
+        continueBackgroundEnable()
+    }
+
+    private fun continueBackgroundEnable() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            !hasNotificationPermission
+        ) {
+            notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+            return
+        }
+        enableBackgroundService()
+    }
+
+    private fun enableBackgroundService() {
+        ShakeService.start(this)
+        stopForegroundSensorListening()
+        setSwitchSilently(true)
+        pendingBackgroundEnable = false
         updateStatus()
     }
 
@@ -173,6 +208,19 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun attachSwitchListener() {
+        binding.backgroundSwitch.setOnCheckedChangeListener { _, isChecked ->
+            onBackgroundToggle(isChecked)
+        }
+    }
+
+    private fun setSwitchSilently(checked: Boolean) {
+        if (binding.backgroundSwitch.isChecked == checked) return
+        binding.backgroundSwitch.setOnCheckedChangeListener(null)
+        binding.backgroundSwitch.isChecked = checked
+        attachSwitchListener()
+    }
+
     @Suppress("DEPRECATION")
     private fun buzz() {
         val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -185,5 +233,10 @@ class MainActivity : AppCompatActivity() {
         } else {
             vibrator.vibrate(40)
         }
+    }
+
+    companion object {
+        private const val PREFS_NAME = "pixelshaketorch"
+        private const val KEY_FIRST_LAUNCH_DONE = "first_launch_done"
     }
 }
