@@ -8,7 +8,7 @@ import kotlin.math.sqrt
 
 class ShakeDetector(
     private val onShake: () -> Unit,
-    private val shakeThresholdG: Float = 2.7f,
+    @Volatile var shakeThresholdG: Float = 2.7f,
     private val minPeaks: Int = 3,
     private val peakWindowMs: Long = 1_000L,
     private val cooldownMs: Long = 1_500L,

@@ -11,8 +11,8 @@ android {
         applicationId = "com.naterobertson.pixelshaketorch"
         minSdk = 24
         targetSdk = 34
-        versionCode = 4
-        versionName = "0.4.0"
+        versionCode = 5
+        versionName = "0.5.0"
     }
 
     // Stable debug keystore committed to the repo so every build (local or CI)

@@ -6,6 +6,7 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.content.SharedPreferences
 import android.content.pm.ServiceInfo
 import android.hardware.Sensor
 import android.hardware.SensorManager
@@ -19,16 +20,28 @@ class ShakeService : Service() {
     private lateinit var sensorManager: SensorManager
     private lateinit var flashlight: FlashlightController
     private lateinit var shakeDetector: ShakeDetector
+    private lateinit var prefs: SharedPreferences
     private var wakeLock: PowerManager.WakeLock? = null
     private var listening = false
+
+    private val prefsListener = SharedPreferences.OnSharedPreferenceChangeListener { p, key ->
+        if (key == Prefs.KEY_SHAKE_THRESHOLD_G) {
+            shakeDetector.shakeThresholdG = Prefs.threshold(p)
+        }
+    }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onCreate() {
         super.onCreate()
+        prefs = Prefs.get(this)
         sensorManager = getSystemService(SENSOR_SERVICE) as SensorManager
         flashlight = FlashlightController(this).also { it.start() }
-        shakeDetector = ShakeDetector(onShake = { flashlight.toggle() })
+        shakeDetector = ShakeDetector(
+            onShake = { flashlight.toggle() },
+            shakeThresholdG = Prefs.threshold(prefs)
+        )
+        prefs.registerOnSharedPreferenceChangeListener(prefsListener)
 
         val pm = getSystemService(POWER_SERVICE) as PowerManager
         wakeLock = pm.newWakeLock(
@@ -54,6 +67,7 @@ class ShakeService : Service() {
 
     override fun onDestroy() {
         stopListening()
+        prefs.unregisterOnSharedPreferenceChangeListener(prefsListener)
         flashlight.stop()
         wakeLock?.let { if (it.isHeld) it.release() }
         wakeLock = null

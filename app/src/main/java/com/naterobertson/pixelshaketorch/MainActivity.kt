@@ -45,16 +45,20 @@ class MainActivity : AppCompatActivity() {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        prefs = Prefs.get(this)
 
         sensorManager = getSystemService(Context.SENSOR_SERVICE) as SensorManager
         flashlight = FlashlightController(this)
         flashlight.onStateChanged = { on -> renderTorchState(on) }
 
-        shakeDetector = ShakeDetector(onShake = { onShakeDetected() })
+        shakeDetector = ShakeDetector(
+            onShake = { onShakeDetected() },
+            shakeThresholdG = Prefs.threshold(prefs)
+        )
 
         binding.toggleButton.setOnClickListener { flashlight.toggle() }
         attachSwitchListener()
+        setupSensitivitySlider()
 
         hasNotificationPermission =
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -63,12 +67,31 @@ class MainActivity : AppCompatActivity() {
                 ) == PackageManager.PERMISSION_GRANTED
             } else true
 
-        val isFirstLaunch = !prefs.getBoolean(KEY_FIRST_LAUNCH_DONE, false)
+        val isFirstLaunch = !prefs.getBoolean(Prefs.KEY_FIRST_LAUNCH_DONE, false)
         if (isFirstLaunch && flashlight.isAvailable) {
-            prefs.edit().putBoolean(KEY_FIRST_LAUNCH_DONE, true).apply()
+            prefs.edit().putBoolean(Prefs.KEY_FIRST_LAUNCH_DONE, true).apply()
             pendingBackgroundEnable = true
             requestNextPermissionForBackground()
         }
+    }
+
+    private fun setupSensitivitySlider() {
+        val current = Prefs.threshold(prefs).coerceIn(Prefs.MIN_THRESHOLD_G, Prefs.MAX_THRESHOLD_G)
+        binding.sensitivitySlider.valueFrom = Prefs.MIN_THRESHOLD_G
+        binding.sensitivitySlider.valueTo = Prefs.MAX_THRESHOLD_G
+        binding.sensitivitySlider.stepSize = Prefs.THRESHOLD_STEP_G
+        binding.sensitivitySlider.value = current
+        renderSensitivity(current)
+
+        binding.sensitivitySlider.addOnChangeListener { _, value, _ ->
+            renderSensitivity(value)
+            shakeDetector.shakeThresholdG = value
+            prefs.edit().putFloat(Prefs.KEY_SHAKE_THRESHOLD_G, value).apply()
+        }
+    }
+
+    private fun renderSensitivity(value: Float) {
+        binding.sensitivityLabel.text = getString(R.string.sensitivity_label, value)
     }
 
     override fun onStart() {
@@ -198,8 +221,4 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    companion object {
-        private const val PREFS_NAME = "pixelshaketorch"
-        private const val KEY_FIRST_LAUNCH_DONE = "first_launch_done"
-    }
 }
