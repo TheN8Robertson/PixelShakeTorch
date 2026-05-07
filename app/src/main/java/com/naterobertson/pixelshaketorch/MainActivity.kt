@@ -24,34 +24,18 @@ class MainActivity : AppCompatActivity() {
     private lateinit var shakeDetector: ShakeDetector
     private lateinit var prefs: SharedPreferences
 
-    private var hasCameraPermission = false
     private var hasNotificationPermission = false
     private var pendingBackgroundEnable = false
-
-    private val cameraPermission = registerForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { granted ->
-        hasCameraPermission = granted
-        if (granted && pendingBackgroundEnable) {
-            continueBackgroundEnable()
-        } else if (!granted) {
-            pendingBackgroundEnable = false
-            setSwitchSilently(false)
-        }
-        updateStatus()
-    }
 
     private val notificationPermission = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { granted ->
         hasNotificationPermission = granted
         if (pendingBackgroundEnable) {
-            if (granted) {
-                enableBackgroundService()
-            } else {
-                pendingBackgroundEnable = false
-                setSwitchSilently(false)
-            }
+            // Even if the user denied notifications, we still start the service —
+            // Android will fail the FGS notification silently but shake detection
+            // continues to work; this is preferable to leaving background mode off.
+            enableBackgroundService()
         }
         updateStatus()
     }
@@ -72,10 +56,6 @@ class MainActivity : AppCompatActivity() {
         binding.toggleButton.setOnClickListener { flashlight.toggle() }
         attachSwitchListener()
 
-        hasCameraPermission = ContextCompat.checkSelfPermission(
-            this, Manifest.permission.CAMERA
-        ) == PackageManager.PERMISSION_GRANTED
-
         hasNotificationPermission =
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 ContextCompat.checkSelfPermission(
@@ -84,14 +64,10 @@ class MainActivity : AppCompatActivity() {
             } else true
 
         val isFirstLaunch = !prefs.getBoolean(KEY_FIRST_LAUNCH_DONE, false)
-        if (isFirstLaunch) {
+        if (isFirstLaunch && flashlight.isAvailable) {
             prefs.edit().putBoolean(KEY_FIRST_LAUNCH_DONE, true).apply()
-            if (flashlight.isAvailable) {
-                pendingBackgroundEnable = true
-                requestNextPermissionForBackground()
-            }
-        } else if (!hasCameraPermission) {
-            cameraPermission.launch(Manifest.permission.CAMERA)
+            pendingBackgroundEnable = true
+            requestNextPermissionForBackground()
         }
     }
 
@@ -151,14 +127,6 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun requestNextPermissionForBackground() {
-        if (!hasCameraPermission) {
-            cameraPermission.launch(Manifest.permission.CAMERA)
-            return
-        }
-        continueBackgroundEnable()
-    }
-
-    private fun continueBackgroundEnable() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             !hasNotificationPermission
         ) {
@@ -177,10 +145,6 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun onShakeDetected() {
-        if (!hasCameraPermission) {
-            cameraPermission.launch(Manifest.permission.CAMERA)
-            return
-        }
         if (flashlight.toggle()) {
             buzz()
         }
@@ -202,7 +166,6 @@ class MainActivity : AppCompatActivity() {
     private fun updateStatus() {
         binding.hintText.text = when {
             !flashlight.isAvailable -> getString(R.string.hint_no_flash)
-            !hasCameraPermission -> getString(R.string.hint_need_permission)
             ShakeService.isRunning -> getString(R.string.hint_shake_to_toggle_bg)
             else -> getString(R.string.hint_shake_to_toggle)
         }
